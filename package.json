@@ -11,6 +11,7 @@
   "author": "Chester Okwulehie",
   "license": "ISC",
   "dependencies": {
+    "cors": "^2.8.5",
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
     "megajs": "^1.3.9",
@@ -20,6 +21,7 @@
     "pdf2pic": "^3.2.0"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
     "@types/megajs": "^0.14.7",
     "@types/morgan": "^1.9.10",

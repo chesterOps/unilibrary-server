@@ -6,8 +6,9 @@ dotenv.config();
 import AppError from "./utils/appError";
 import errorHandler from "./utils/errorHandler";
 import morgan from "morgan";
-import express, { Express, Response, Request, NextFunction } from "express";
+import cors from "cors";
 import bookRouter from "./routes/book.routes";
+import express, { Express, Response, Request, NextFunction } from "express";
 import { connectDB } from "./config/db";
 
 // Create express app
@@ -18,6 +19,27 @@ if (process.env.NODE_ENV === "development") app.use(morgan("dev"));
 
 // Define port
 const PORT: number = Number(process.env.PORT || 3000);
+
+// Allowed origins
+const allowedOrigins = process.env.FRONT_URL?.split(" ");
+
+// Allow all origins
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps, curl, Postman)
+      if (!origin) return callback(null, true);
+
+      // Allow allowed origins
+      if (allowedOrigins && allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true,
+  })
+);
 
 // Parse body
 app.use(
