@@ -3,7 +3,7 @@ import AppError from "../utils/appError";
 import catchAsync from "../utils/catchAsync";
 import { uploadToMega } from "../utils/handlerMega";
 import { slugify } from "../utils/helpers";
-import { deleteOne, findAll } from "../utils/handlerFactory";
+import { deleteOne, findAll, findOne } from "../utils/handlerFactory";
 import { File } from "megajs";
 
 // Define UploadedFile type
@@ -16,10 +16,10 @@ type UploadedFile = {
 
 // Upload book
 export const uploadBook = catchAsync(async (req, res, next) => {
-  const { title, category, description } = req.body;
+  const { title, courseCode, year } = req.body;
 
   // Validate required fields
-  if (!req.file || !title || !category || !description)
+  if (!req.file || !title || !courseCode || !year)
     return next(new AppError("Missing required fields", 400));
 
   // File type
@@ -34,8 +34,8 @@ export const uploadBook = catchAsync(async (req, res, next) => {
   // Create new book
   const newBook = new Book({
     title,
-    category,
-    description,
+    courseCode,
+    year,
     file: {
       megaFileId: uploadedFile.megaFileId,
       url: uploadedFile.url,
@@ -89,3 +89,5 @@ export const readBook = catchAsync(async (req, res, next) => {
 export const deleteBook = deleteOne(Book);
 
 export const getBooks = findAll(Book, "title");
+
+export const getBook = findOne(Book);

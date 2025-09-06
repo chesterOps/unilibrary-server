@@ -11,15 +11,13 @@
   "author": "Chester Okwulehie",
   "license": "ISC",
   "dependencies": {
-    "canvas": "^3.2.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
     "megajs": "^1.3.9",
     "mongoose": "^8.16.5",
     "morgan": "^1.10.1",
-    "multer": "^2.0.2",
-    "pdfjs-dist": "^5.4.149"
+    "multer": "^2.0.2"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",

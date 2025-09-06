@@ -10,16 +10,13 @@ const bookSchema = new mongoose.Schema(
       set: (value: string) => value.charAt(0).toUpperCase() + value.slice(1),
       trim: true,
     },
-    description: {
+    courseCode: {
       type: String,
-      maxlength: 2000,
       required: true,
     },
-    category: {
-      type: String,
+    year: {
+      type: Number,
       required: true,
-      set: (value: string) => value.charAt(0).toUpperCase() + value.slice(1),
-      default: "Other",
     },
     file: {
       type: {
