@@ -41,15 +41,15 @@ app.use(
   })
 );
 
-// Book router
-app.use("/api/v1/books", bookRouter);
-
-//Parse body
+// Parse body
 app.use(
   express.json({
     limit: "10kb",
   })
 );
+
+// Book router
+app.use("/api/v1/books", bookRouter);
 
 // Send response
 app.get("/", (_req: Request, res: Response) => {
