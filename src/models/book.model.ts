@@ -21,12 +21,6 @@ const bookSchema = new mongoose.Schema(
       set: (value: string) => value.charAt(0).toUpperCase() + value.slice(1),
       default: "Other",
     },
-    coverImage: {
-      type: {
-        megaFileId: { type: String, required: true },
-        url: { type: String, required: true },
-      },
-    },
     file: {
       type: {
         megaFileId: { type: String, required: true },

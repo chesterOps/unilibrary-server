@@ -13,7 +13,7 @@ const upload = multer({
     ) {
       cb(null, true);
     } else {
-      cb(new Error("Only PDF and image files are allowed"));
+      cb(new Error("Only PDF and epub files are allowed"));
     }
   },
 });

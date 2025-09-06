@@ -1,7 +1,6 @@
 import Book from "../models/book.model";
 import AppError from "../utils/appError";
 import catchAsync from "../utils/catchAsync";
-import { convertPdfToImage } from "../utils/convert";
 import { uploadToMega } from "../utils/handlerMega";
 import { slugify } from "../utils/helpers";
 import { deleteOne, findAll } from "../utils/handlerFactory";
@@ -32,19 +31,6 @@ export const uploadBook = catchAsync(async (req, res, next) => {
     `${slugify(title)}.${fileType}`
   )) as UploadedFile;
 
-  // Generate cover image
-  let coverImage;
-  const coverBuffer = await convertPdfToImage(req.file.buffer);
-
-  // Upload cover image
-  if (coverBuffer) {
-    // Upload cover image
-    coverImage = (await uploadToMega(
-      coverBuffer,
-      `${slugify(title)}-cover.png`
-    )) as UploadedFile;
-  }
-
   // Create new book
   const newBook = new Book({
     title,
@@ -57,13 +43,6 @@ export const uploadBook = catchAsync(async (req, res, next) => {
       format: fileType,
     },
   });
-
-  // Check for coverImage
-  if (coverImage)
-    newBook.coverImage = {
-      megaFileId: coverImage.megaFileId,
-      url: coverImage.url,
-    };
 
   // Save book
   await newBook.save();
