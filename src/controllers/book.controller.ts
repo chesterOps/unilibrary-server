@@ -57,7 +57,7 @@ export const uploadBook = catchAsync(async (req, res, next) => {
 // Read book
 export const readBook = catchAsync(async (req, res, next) => {
   // Get book
-  const book = await Book.findById(req.params.id);
+  const book = await Book.findOne({ slug: req.params.id });
 
   // Check if book was found
   if (!book || !book.file?.url)
@@ -90,4 +90,4 @@ export const deleteBook = deleteOne(Book);
 
 export const getBooks = findAll(Book, "title");
 
-export const getBook = findOne(Book);
+export const getBook = findOne(Book, "slug");

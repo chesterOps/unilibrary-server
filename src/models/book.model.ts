@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
-import { deleteFromMega } from "../utils/handlerMega";
+import { deleteOne } from "../utils/handlerMega";
+import { slugify } from "../utils/helpers";
 
 // Book schema
 const bookSchema = new mongoose.Schema(
@@ -14,6 +15,7 @@ const bookSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    slug: String,
     year: {
       type: Number,
       required: true,
@@ -30,19 +32,19 @@ const bookSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-bookSchema.post("findOneAndDelete", async function (book) {
+bookSchema.post("findOneAndDelete", async function (doc) {
   // Delete associated files from MEGA
-  if (book) {
-    // Array to hold nodeIds
-    const nodeIds = [];
 
-    // Check for file and coverImage ids
-    if (book.file.megaFileId) nodeIds.push(book.file.megaFileId);
-    if (book.coverImage.megaFileId) nodeIds.push(book.coverImage.megaFileId);
-
-    // Delete files from MEGA
-    await deleteFromMega(nodeIds);
+  if (doc) {
+    // Check for file
+    if (doc.file.megaFileId) await deleteOne(doc.file.megaFileId);
   }
+});
+
+bookSchema.pre("save", function (next) {
+  if (!this.isModified("title")) return next();
+  this.slug = slugify(this.title);
+  next();
 });
 
 const Book = mongoose.model("Book", bookSchema);

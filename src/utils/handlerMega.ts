@@ -58,8 +58,3 @@ export const deleteOne = async (nodeId: string): Promise<void> => {
     }
   });
 };
-
-// Delete multiple files
-export const deleteFromMega = async (nodeIds: string[]) => {
-  return Promise.all(nodeIds.map((id) => deleteOne(id)));
-};
