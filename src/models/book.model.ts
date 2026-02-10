@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { deleteOne } from "../utils/handlerMega";
 import { slugify } from "../utils/helpers";
+import { deleteImage } from "../middlewares/image";
 
 // Book schema
 const bookSchema = new mongoose.Schema(
@@ -28,8 +29,15 @@ const bookSchema = new mongoose.Schema(
         format: { type: String, required: true },
       },
     },
+    image: {
+      type: {
+        public_id: { type: String, required: true },
+        url: { type: String, required: true },
+      },
+      required: true,
+    },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 bookSchema.post("findOneAndDelete", async function (doc) {
@@ -38,6 +46,9 @@ bookSchema.post("findOneAndDelete", async function (doc) {
   if (doc) {
     // Check for file
     if (doc.file.megaFileId) await deleteOne(doc.file.megaFileId);
+
+    // Check for image
+    if (doc.image.public_id) await deleteImage(doc.image.public_id);
   }
 });
 

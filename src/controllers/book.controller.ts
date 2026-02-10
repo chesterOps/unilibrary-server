@@ -18,17 +18,22 @@ type UploadedFile = {
 export const uploadBook = catchAsync(async (req, res, next) => {
   const { title, courseCode, year } = req.body;
 
+  // Get files from req.files (when using upload.fields())
+  const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+  const file = files?.file?.[0];
+  const image = req.body.image;
+
   // Validate required fields
-  if (!req.file || !title || !courseCode || !year)
+  if (!file || !title || !courseCode || !year || !image)
     return next(new AppError("Missing required fields", 400));
 
   // File type
-  const fileType = req.file.mimetype.split("/")[1];
+  const fileType = file.mimetype.split("/")[1];
 
   // Upload book file to Mega
   const uploadedFile = (await uploadToMega(
-    req.file.buffer,
-    `${slugify(title)}.${fileType}`
+    file.buffer,
+    `${slugify(title)}.${fileType}`,
   )) as UploadedFile;
 
   // Create new book
@@ -42,6 +47,7 @@ export const uploadBook = catchAsync(async (req, res, next) => {
       size: uploadedFile.size,
       format: fileType,
     },
+    image, // Image info is already attached to req.body by uploadImage middleware
   });
 
   // Save book

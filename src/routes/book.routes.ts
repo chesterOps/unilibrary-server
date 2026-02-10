@@ -7,11 +7,22 @@ import {
   readBook,
   uploadBook,
 } from "../controllers/book.controller";
+import { uploadImage } from "../middlewares/image";
 
 // Book router
 const bookRouter = express.Router();
 
-bookRouter.route("/").post(upload.single("file"), uploadBook).get(getBooks);
+bookRouter
+  .route("/")
+  .post(
+    upload.fields([
+      { name: "file", maxCount: 1 },
+      { name: "image", maxCount: 1 },
+    ]),
+    uploadImage("image"),
+    uploadBook,
+  )
+  .get(getBooks);
 
 bookRouter.route("/:id").get(getBook).delete(deleteBook);
 

@@ -38,14 +38,14 @@ app.use(
       }
     },
     credentials: true,
-  })
+  }),
 );
 
 // Parse body
 app.use(
   express.json({
     limit: "10kb",
-  })
+  }),
 );
 
 // Book router
