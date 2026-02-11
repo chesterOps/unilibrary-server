@@ -30,12 +30,8 @@ app.use(
       // Allow requests with no origin (like mobile apps, curl, Postman)
       if (!origin) return callback(null, true);
 
-      // Allow allowed origins
-      if (allowedOrigins && allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error("Not allowed by CORS"));
-      }
+      // Allow all origins for now
+      callback(null, true);
     },
     credentials: true,
   }),
