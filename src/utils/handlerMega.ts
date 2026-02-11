@@ -3,7 +3,7 @@ import { megaStorage } from "../config/megaClient";
 export const uploadToMega = async (
   fileBuffer: Buffer,
   fileName: string,
-  folderName: string = "unilibrary"
+  folderName: string = "unilibrary",
 ) => {
   return new Promise(async (resolve, reject) => {
     // Check for folder

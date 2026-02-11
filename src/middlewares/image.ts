@@ -59,8 +59,6 @@ export const uploadImage =
 
         // Attach to request body
         req.body[field] = image;
-
-        console.log(req.body);
       } catch (error: any) {
         // Log error but don't block the request
         console.error(
