@@ -3,7 +3,7 @@ import {
   getRecommendations,
   getPopular,
 } from "../controllers/recommendation.controller";
-import { protect, authorize } from "../middlewares/auth.middleware";
+import { optionalProtect } from "../middlewares/auth.middleware";
 
 const recommendationRouter = express.Router();
 
@@ -11,11 +11,6 @@ const recommendationRouter = express.Router();
 // from treating the literal string "popular" as a parameter value.
 recommendationRouter.get("/popular", getPopular);
 
-recommendationRouter.get(
-  "/",
-  protect,
-  authorize("student"),
-  getRecommendations,
-);
+recommendationRouter.get("/", optionalProtect, getRecommendations);
 
 export default recommendationRouter;

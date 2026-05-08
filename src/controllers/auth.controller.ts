@@ -9,9 +9,11 @@ import { signToken } from "../utils/jwt";
 
 const safeUser = (user: IUser) => ({
   _id: user._id,
+  id: (user._id as string).toString(),
   name: user.name,
   email: user.email,
   role: user.role,
+  approved: user.approved,
   department: user.department,
   level: user.level,
   courses: user.courses,
@@ -51,9 +53,14 @@ export const register = catchAsync(
       department,
       level,
       courses,
+      approved: false,
     });
 
-    sendTokenResponse(user, 201, res);
+    res.status(201).json({
+      status: "success",
+      message: "Account created successfully. Awaiting admin approval.",
+      data: { user: safeUser(user) },
+    });
   },
 );
 
@@ -74,7 +81,20 @@ export const login = catchAsync(
       return next(new AppError("Incorrect email or password.", 401));
     }
 
-    sendTokenResponse(user, 200, res);
+    if (!user.approved) {
+      return next(
+        new AppError("Your account is pending admin approval", 403),
+      );
+    }
+
+    const token = signToken((user._id as string).toString());
+
+    res.status(200).json({
+      status: "success",
+      token,
+      user: safeUser(user),
+      data: { user: safeUser(user) },
+    });
   },
 );
 

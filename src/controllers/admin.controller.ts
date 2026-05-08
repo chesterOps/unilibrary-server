@@ -6,12 +6,11 @@ import Material from "../models/material.model";
 import SearchLog from "../models/searchLog.model";
 import AppError from "../utils/appError";
 import catchAsync from "../utils/catchAsync";
+import { findMaterialByIdentifier, normalizeMaterial } from "../utils/materialResponse";
 
-// Local aggregate return-shape types
 type RoleCount = { _id: string; count: number };
-type DeptCount = { department: string; count: number };
-type DownloadTotal = { _id: null; total: number };
-type QueryCount = { query: string; count: number };
+type DeptCount = { _id: string; count: number };
+type DailyCount = { _id: { year: number; month: number; day: number }; count: number };
 
 function startOfToday(): Date {
   const d = new Date();
@@ -19,122 +18,211 @@ function startOfToday(): Date {
   return d;
 }
 
-// ── GET /api/v1/admin/stats ───────────────────────────────────────────────────
-//
-// All nine queries run in parallel via Promise.all — total latency equals
-// the slowest single query, not the sum of all nine.
+function startOfDaysAgo(daysAgo: number): Date {
+  const d = startOfToday();
+  d.setDate(d.getDate() - daysAgo);
+  return d;
+}
+
+function normalizeUser(user: any) {
+  const item = typeof user.toObject === "function" ? user.toObject() : user;
+  return {
+    ...item,
+    id: item._id?.toString?.() || item._id,
+  };
+}
 
 export const getStats = catchAsync(
   async (_req: Request, res: Response, _next: NextFunction) => {
     const [
-      usersByRole,
-      materialsByDept,
-      downloadsAgg,
-      mostDownloaded,
-      topSearchAgg,
-      searchesToday,
       totalUsers,
       totalMaterials,
-      pendingCount,
+      totalDownloadsAgg,
+      pendingUsers,
+      pendingMaterials,
+      materialsByDepartmentRaw,
+      usersByRoleRaw,
+      searchesByDayRaw,
+      mostDownloaded,
+      mostSearchedRaw,
+      searchesToday,
+      topMaterialsRaw,
     ] = await Promise.all([
+      User.countDocuments(),
+      Material.countDocuments(),
+      Material.aggregate([{ $group: { _id: null, total: { $sum: "$downloadCount" } } }]),
+      User.countDocuments({ approved: false }),
+      Material.countDocuments({ approved: false }),
+      Material.aggregate<DeptCount>([
+        { $group: { _id: "$department", count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+      ]),
       User.aggregate<RoleCount>([
         { $group: { _id: "$role", count: { $sum: 1 } } },
         { $sort: { count: -1 } },
       ]),
-
-      Material.aggregate<DeptCount>([
-        { $group: { _id: "$department", count: { $sum: 1 } } },
-        { $sort: { count: -1 } },
-        { $project: { _id: 0, department: "$_id", count: 1 } },
+      SearchLog.aggregate<DailyCount>([
+        { $match: { createdAt: { $gte: startOfDaysAgo(6) } } },
+        {
+          $group: {
+            _id: {
+              year: { $year: "$createdAt" },
+              month: { $month: "$createdAt" },
+              day: { $dayOfMonth: "$createdAt" },
+            },
+            count: { $sum: 1 },
+          },
+        },
+        { $sort: { "_id.year": 1, "_id.month": 1, "_id.day": 1 } },
       ]),
-
-      Material.aggregate<DownloadTotal>([
-        { $group: { _id: null, total: { $sum: "$downloadCount" } } },
-      ]),
-
-      // embedding has select:false — excluded automatically; no extra .select() needed
-      Material.findOne().sort("-downloadCount").populate("uploadedBy", "name email"),
-
-      SearchLog.aggregate<QueryCount>([
-        { $group: { _id: "$query", count: { $sum: 1 } } },
-        { $sort: { count: -1 } },
-        { $limit: 1 },
-        { $project: { _id: 0, query: "$_id", count: 1 } },
-      ]),
-
+      Material.findOne().sort("-downloadCount -createdAt").select("title downloadCount"),
+      SearchLog.aggregate([{ $group: { _id: "$query", count: { $sum: 1 } } }, { $sort: { count: -1 } }, { $limit: 1 }]),
       SearchLog.countDocuments({ createdAt: { $gte: startOfToday() } }),
-      User.countDocuments(),
-      Material.countDocuments(),
-      Material.countDocuments({ approved: false }),
+      Material.find().sort("-downloadCount -createdAt").limit(5).select("legacyId title courseCode downloadCount"),
     ]);
 
-    // Reshape role array → { student: N, lecturer: N, admin: N }
-    const byRole = usersByRole.reduce<Record<string, number>>((acc, r) => {
-      acc[r._id] = r.count;
-      return acc;
-    }, {});
+    const totalDownloads = totalDownloadsAgg[0]?.total ?? 0;
+    const materialsByDepartment = materialsByDepartmentRaw.map((item) => ({
+      department: item._id,
+      count: item.count,
+    }));
+    const usersByRole = usersByRoleRaw.map((item) => ({
+      role: item._id,
+      count: item.count,
+    }));
+
+    const searchMap = new Map(
+      searchesByDayRaw.map((item) => [
+        `${item._id.year}-${String(item._id.month).padStart(2, "0")}-${String(item._id.day).padStart(2, "0")}`,
+        item.count,
+      ]),
+    );
+
+    const searchesOverTime = Array.from({ length: 7 }, (_, index) => {
+      const date = startOfDaysAgo(6 - index);
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+      return {
+        date: key,
+        count: searchMap.get(key) ?? 0,
+      };
+    });
+
+    const topMaterials = topMaterialsRaw.map((material) => ({
+      id: (material as any).legacyId || (material as any)._id.toString(),
+      _id: (material as any)._id,
+      title: (material as any).title,
+      courseCode: (material as any).courseCode,
+      downloads: (material as any).downloadCount ?? 0,
+      downloadCount: (material as any).downloadCount ?? 0,
+    }));
 
     res.status(200).json({
       status: "success",
+      totalUsers,
+      totalMaterials,
+      totalDownloads,
+      pendingUsers,
+      pendingMaterials,
+      materialsByDepartment,
+      usersByRole,
+      searchesOverTime,
+      mostDownloaded: mostDownloaded
+        ? {
+            title: (mostDownloaded as any).title,
+            downloads: (mostDownloaded as any).downloadCount ?? 0,
+          }
+        : null,
+      mostSearched: mostSearchedRaw[0]?._id ?? "",
+      searchesToday,
+      topMaterials,
       data: {
-        users: {
-          total: totalUsers,
-          byRole,
-        },
-        materials: {
-          total: totalMaterials,
-          pending: pendingCount,
-          byDepartment: materialsByDept,
-        },
-        downloads: {
-          total: downloadsAgg[0]?.total ?? 0,
-          mostDownloaded,
-        },
-        searches: {
-          today: searchesToday,
-          topQuery: topSearchAgg[0] ?? null,
-        },
+        totalUsers,
+        totalMaterials,
+        totalDownloads,
+        pendingUsers,
+        pendingMaterials,
+        materialsByDepartment,
+        usersByRole,
+        searchesOverTime,
+        mostDownloaded: mostDownloaded
+          ? {
+              title: (mostDownloaded as any).title,
+              downloads: (mostDownloaded as any).downloadCount ?? 0,
+            }
+          : null,
+        mostSearched: mostSearchedRaw[0]?._id ?? "",
+        searchesToday,
+        topMaterials,
       },
     });
   },
 );
 
-// ── GET /api/v1/admin/users ───────────────────────────────────────────────────
-//
-// Paginated. Optional query params: ?role=student|lecturer|admin  ?department=X
-
 export const getUsers = catchAsync(
-  async (req: Request, res: Response, _next: NextFunction) => {
-    const { role, department, page = 1, limit = 20 } = req.query;
-
-    const filter: Record<string, unknown> = {};
-    if (role && typeof role === "string") filter.role = role;
-    if (department && typeof department === "string") {
-      filter.department = new RegExp(department.trim(), "i");
-    }
-
-    const skip = (Number(page) - 1) * Number(limit);
-
-    const [users, total] = await Promise.all([
-      User.find(filter)
-        .skip(skip)
-        .limit(Number(limit))
-        .sort("-createdAt")
-        .select("-__v"),
-      User.countDocuments(filter),
-    ]);
+  async (_req: Request, res: Response, _next: NextFunction) => {
+    const users = (await User.find().sort("-createdAt").select("-__v")).map(normalizeUser);
 
     res.status(200).json({
       status: "success",
-      total,
-      page: Number(page),
-      length: users.length,
+      users,
+      total: users.length,
       data: { users },
     });
   },
 );
 
-// ── PUT /api/v1/admin/users/:id/role ──────────────────────────────────────────
+export const getPendingUsers = catchAsync(
+  async (_req: Request, res: Response, _next: NextFunction) => {
+    const users = (
+      await User.find({ approved: false }).sort("-createdAt").select("-__v")
+    ).map(normalizeUser);
+
+    res.status(200).json({
+      status: "success",
+      users,
+      total: users.length,
+      data: { users },
+    });
+  },
+);
+
+export const approveUser = catchAsync(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { approved: true },
+      { new: true, runValidators: true },
+    ).select("-__v");
+
+    if (!user) {
+      return next(new AppError("No user found with that ID.", 404));
+    }
+
+    res.status(200).json({
+      status: "success",
+      message: "User approved successfully.",
+      user: normalizeUser(user),
+      data: { user: normalizeUser(user) },
+    });
+  },
+);
+
+export const rejectUser = catchAsync(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const user = await User.findByIdAndDelete(req.params.id).select("-__v");
+
+    if (!user) {
+      return next(new AppError("No user found with that ID.", 404));
+    }
+
+    res.status(200).json({
+      status: "success",
+      message: "User rejected successfully.",
+      user: normalizeUser(user),
+      data: { user: normalizeUser(user) },
+    });
+  },
+);
 
 export const updateUserRole = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
@@ -148,7 +236,6 @@ export const updateUserRole = catchAsync(
       );
     }
 
-    // An admin changing their own role could lock themselves out of the panel
     if ((req.user!._id as mongoose.Types.ObjectId).toString() === id) {
       return next(new AppError("You cannot change your own role.", 403));
     }
@@ -165,54 +252,66 @@ export const updateUserRole = catchAsync(
 
     res.status(200).json({
       status: "success",
-      data: { user },
+      user: normalizeUser(user),
+      data: { user: normalizeUser(user) },
     });
   },
 );
 
-// ── GET /api/v1/admin/materials/pending ───────────────────────────────────────
-
 export const getPendingMaterials = catchAsync(
-  async (req: Request, res: Response, _next: NextFunction) => {
-    const { page = 1, limit = 20 } = req.query;
-    const skip = (Number(page) - 1) * Number(limit);
+  async (_req: Request, res: Response, _next: NextFunction) => {
+    const materials = await Material.find({ approved: false })
+      .sort("-createdAt")
+      .populate("uploadedBy", "name email role department");
 
-    const [materials, total] = await Promise.all([
-      Material.find({ approved: false })
-        .skip(skip)
-        .limit(Number(limit))
-        .sort("-createdAt")
-        .populate("uploadedBy", "name email role department"),
-      Material.countDocuments({ approved: false }),
-    ]);
+    const normalized = materials.map(normalizeMaterial);
 
     res.status(200).json({
       status: "success",
-      total,
-      page: Number(page),
-      length: materials.length,
-      data: { materials },
+      materials: normalized,
+      total: normalized.length,
+      data: { materials: normalized },
     });
   },
 );
 
-// ── PUT /api/v1/admin/materials/:id/approve ───────────────────────────────────
-
 export const approveMaterial = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
-    const material = await Material.findByIdAndUpdate(
-      req.params.id,
-      { approved: true },
-      { new: true },
-    ).populate("uploadedBy", "name email role");
+    const material = await findMaterialByIdentifier(req.params.id);
 
     if (!material) {
       return next(new AppError("No material found with that ID.", 404));
     }
 
+    material.approved = true;
+    await material.save();
+    await material.populate("uploadedBy", "name email role");
+
     res.status(200).json({
       status: "success",
-      data: { material },
+      message: "Material approved successfully.",
+      material: normalizeMaterial(material),
+      data: { material: normalizeMaterial(material) },
+    });
+  },
+);
+
+export const rejectMaterial = catchAsync(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const material = await findMaterialByIdentifier(req.params.id);
+
+    if (!material) {
+      return next(new AppError("No material found with that ID.", 404));
+    }
+
+    const normalized = normalizeMaterial(material);
+    await material.deleteOne();
+
+    res.status(200).json({
+      status: "success",
+      message: "Material rejected successfully.",
+      material: normalized,
+      data: { material: normalized },
     });
   },
 );

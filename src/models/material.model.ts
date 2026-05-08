@@ -4,18 +4,23 @@ import { slugify } from "../utils/helpers";
 export type FileType = "pdf" | "doc" | "docx" | "ppt" | "pptx" | "other";
 
 export interface IMaterial extends Document {
+  legacyId?: string;
   title: string;
   slug: string;
   courseCode: string;
   department: string;
+  type?: string;
+  description?: string;
   level: number;
   academicSession: string;
   fileUrl: string;
+  fileName?: string;
   fileType: FileType;
   uploadedBy: mongoose.Types.ObjectId;
   tags: string[];
   embedding: number[];
   downloadCount: number;
+  viewCount: number;
   approved: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -23,6 +28,12 @@ export interface IMaterial extends Document {
 
 const materialSchema = new mongoose.Schema<IMaterial>(
   {
+    legacyId: {
+      type: String,
+      trim: true,
+      unique: true,
+      sparse: true,
+    },
     title: {
       type: String,
       required: [true, "Title is required"],
@@ -43,6 +54,16 @@ const materialSchema = new mongoose.Schema<IMaterial>(
       required: [true, "Department is required"],
       trim: true,
     },
+    type: {
+      type: String,
+      trim: true,
+      default: "General",
+    },
+    description: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     level: {
       type: Number,
       required: [true, "Level is required"],
@@ -55,13 +76,18 @@ const materialSchema = new mongoose.Schema<IMaterial>(
       type: String,
       required: [true, "Academic session is required"],
       match: [
-        /^\d{4}\/\d{4}$/,
-        "Academic session must follow the format YYYY/YYYY (e.g. 2023/2024)",
+        /^(\d{4}\/\d{4}|\d{4})$/,
+        "Academic session must follow the format YYYY/YYYY or YYYY",
       ],
     },
     fileUrl: {
       type: String,
       required: [true, "File URL is required"],
+    },
+    fileName: {
+      type: String,
+      trim: true,
+      default: "",
     },
     fileType: {
       type: String,
@@ -91,6 +117,11 @@ const materialSchema = new mongoose.Schema<IMaterial>(
       default: 0,
       min: [0, "Download count cannot be negative"],
     },
+    viewCount: {
+      type: Number,
+      default: 0,
+      min: [0, "View count cannot be negative"],
+    },
     approved: {
       type: Boolean,
       default: false,
@@ -102,6 +133,7 @@ const materialSchema = new mongoose.Schema<IMaterial>(
 // Compound index for the most common filter pattern (filter by course + level)
 materialSchema.index({ courseCode: 1, level: 1 });
 materialSchema.index({ department: 1, level: 1 });
+materialSchema.index({ legacyId: 1 });
 materialSchema.index({ tags: 1 });
 materialSchema.index({ uploadedBy: 1 });
 // Compound index for the admin pending-approval queue (filter + sort in one pass)

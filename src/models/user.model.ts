@@ -14,6 +14,7 @@ export interface IUser extends Document {
   email: string;
   password: string;
   role: UserRole;
+  approved: boolean;
   department: string;
   level?: AcademicLevel;
   courses: string[];
@@ -53,6 +54,10 @@ const userSchema = new mongoose.Schema<IUser>(
         message: "Role must be student, lecturer, or admin",
       },
       default: "student",
+    },
+    approved: {
+      type: Boolean,
+      default: false,
     },
     department: {
       type: String,

@@ -4,8 +4,7 @@ import Material from "../models/material.model";
 import ViewHistory from "../models/viewHistory.model";
 import catchAsync from "../utils/catchAsync";
 import { cosineSimilarity, averageVectors } from "../utils/similarity";
-
-// ── Shared helper ─────────────────────────────────────────────────────────────
+import { normalizeMaterial } from "../utils/materialResponse";
 
 const POPULATE_UPLOADER = { path: "uploadedBy", select: "name email role" };
 
@@ -16,160 +15,135 @@ async function popularInDepartment(department: string, limit: number) {
     .populate(POPULATE_UPLOADER);
 }
 
-// Strip the embedding array before JSON serialisation.
-// 1 536 floats (~12 KB) per document is wasteful for clients that only need
-// the score for display ordering.
-function stripEmbedding(
-  doc: InstanceType<typeof Material>,
-  score: number,
-): Record<string, unknown> {
-  const obj = doc.toObject() as unknown as Record<string, unknown>;
-  delete obj.embedding;
-  return { ...obj, score: parseFloat(score.toFixed(4)) };
-}
+async function getPersonalizedForUser(user: any) {
+  const userId = user._id as mongoose.Types.ObjectId;
+  const history = await ViewHistory.find({ userId }).sort({ viewedAt: -1 }).limit(5).lean();
 
-// ── GET /api/v1/recommendations ───────────────────────────────────────────────
-//
-// Personalised recommendations for the authenticated student.
-//
-// Algorithm
-//   1. Pull the 5 most recently viewed materials from ViewHistory.
-//   2. Load their embeddings from the Material collection.
-//   3. Average those embeddings into a single "taste profile" vector.
-//   4. Score every other embedded material by cosine similarity to the profile.
-//   5. Return the top 6, excluding anything already viewed.
-//
-// Fallbacks (in order)
-//   A. No view history at all     → top 6 most downloaded in user's department
-//   B. History exists but no
-//      embeddings generated yet   → same fallback as A
-//
-// Scalability note: loading all embeddings into Node.js is fine up to ~50 000
-// materials. Beyond that, replace steps 3–5 with a MongoDB Atlas Vector Search
-// $vectorSearch aggregation pipeline.
+  if (history.length === 0) {
+    const popular = await popularInDepartment(user.department, 6);
+    return {
+      source: "popular_no_history",
+      data: popular.map(normalizeMaterial),
+    };
+  }
+
+  const viewedIds = history.map((h) => h.materialId);
+  const viewedWithEmbeddings = await Material.find({
+    _id: { $in: viewedIds },
+    "embedding.0": { $exists: true },
+  }).select("+embedding");
+
+  if (viewedWithEmbeddings.length === 0) {
+    const popular = await popularInDepartment(user.department, 6);
+    return {
+      source: "popular_no_embeddings",
+      data: popular.map(normalizeMaterial),
+    };
+  }
+
+  const profileVector = averageVectors(viewedWithEmbeddings.map((m) => m.embedding));
+  const candidates = await Material.find({
+    _id: { $nin: viewedIds },
+    "embedding.0": { $exists: true },
+  })
+    .select("+embedding")
+    .populate(POPULATE_UPLOADER);
+
+  const results = candidates
+    .map((m) => ({ doc: m, score: cosineSimilarity(profileVector, m.embedding) }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 6)
+    .map(({ doc, score }) => ({
+      ...normalizeMaterial(doc),
+      score: parseFloat(score.toFixed(4)),
+    }));
+
+  return {
+    source: "personalized",
+    data: results,
+  };
+}
 
 export const getRecommendations = catchAsync(
   async (req: Request, res: Response, _next: NextFunction) => {
-    const user = req.user!;
-    const userId = user._id as mongoose.Types.ObjectId;
-
-    // 1. Recent view history (most recent first)
-    const history = await ViewHistory.find({ userId })
-      .sort({ viewedAt: -1 })
-      .limit(5)
-      .lean();
-
-    // ── Fallback A: no history ────────────────────────────────────────────
-    if (history.length === 0) {
-      const popular = await popularInDepartment(user.department, 6);
+    if (req.user && req.user.role === "student") {
+      const personalized = await getPersonalizedForUser(req.user);
       res.status(200).json({
         status: "success",
-        source: "popular_no_history",
-        length: popular.length,
-        data: popular,
+        source: personalized.source,
+        materials: personalized.data,
+        results: personalized.data,
+        length: personalized.data.length,
+        data: personalized.data,
       });
       return;
     }
 
-    const viewedIds = history.map((h) => h.materialId);
-
-    // 2. Load embeddings of the viewed materials
-    const viewedWithEmbeddings = await Material.find({
-      _id: { $in: viewedIds },
-      "embedding.0": { $exists: true },
-    }).select("+embedding");
-
-    // ── Fallback B: history exists but embeddings not yet ready ───────────
-    if (viewedWithEmbeddings.length === 0) {
-      const popular = await popularInDepartment(user.department, 6);
-      res.status(200).json({
-        status: "success",
-        source: "popular_no_embeddings",
-        length: popular.length,
-        data: popular,
-      });
-      return;
-    }
-
-    // 3. Build one profile vector by averaging the viewed embeddings
-    const profileVector = averageVectors(
-      viewedWithEmbeddings.map((m) => m.embedding),
-    );
-
-    // 4. Fetch candidates — embedded materials the user has NOT yet viewed
-    const candidates = await Material.find({
-      _id: { $nin: viewedIds },
-      "embedding.0": { $exists: true },
-    })
-      .select("+embedding")
-      .populate(POPULATE_UPLOADER);
-
-    // 5. Rank by cosine similarity, take top 6
-    const results = candidates
-      .map((m) => ({ doc: m, score: cosineSimilarity(profileVector, m.embedding) }))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 6)
-      .map(({ doc, score }) => stripEmbedding(doc, score));
+    const materials = (
+      await Material.find({ approved: true })
+        .sort("-downloadCount -viewCount -createdAt")
+        .limit(6)
+        .populate(POPULATE_UPLOADER)
+    ).map(normalizeMaterial);
 
     res.status(200).json({
       status: "success",
-      source: "personalized",
-      length: results.length,
-      data: results,
+      source: "general",
+      materials,
+      results: materials,
+      length: materials.length,
+      data: materials,
     });
   },
 );
 
-// ── GET /api/v1/recommendations/popular ──────────────────────────────────────
-//
-// Public. Returns two datasets in one response:
-//
-//   overall      — top 10 most downloaded materials across the whole library
-//   byDepartment — when ?department=X: top 10 for that department
-//                  otherwise: aggregated download totals per department,
-//                  sorted by total downloads (useful for a leaderboard)
-
 export const getPopular = catchAsync(
   async (req: Request, res: Response, _next: NextFunction) => {
     const department =
-      typeof req.query.department === "string"
-        ? req.query.department.trim()
-        : "";
+      typeof req.query.department === "string" ? req.query.department.trim() : "";
 
-    const [overall, byDepartment] = await Promise.all([
-      Material.find()
-        .sort("-downloadCount -createdAt")
+    const query = department
+      ? { department: new RegExp(department, "i"), approved: true }
+      : { approved: true };
+
+    const materials = (
+      await Material.find(query)
+        .sort("-downloadCount -viewCount -createdAt")
         .limit(10)
-        .populate(POPULATE_UPLOADER),
-
-      department
-        ? Material.find({ department: new RegExp(department, "i") })
-            .sort("-downloadCount -createdAt")
-            .limit(10)
-            .populate(POPULATE_UPLOADER)
-        : Material.aggregate([
-            {
-              $group: {
-                _id: "$department",
-                totalDownloads: { $sum: "$downloadCount" },
-                materialCount: { $sum: 1 },
-              },
-            },
-            { $sort: { totalDownloads: -1 } },
-            {
-              $project: {
-                _id: 0,
-                department: "$_id",
-                totalDownloads: 1,
-                materialCount: 1,
-              },
-            },
-          ]),
-    ]);
+        .populate(POPULATE_UPLOADER)
+    ).map(normalizeMaterial);
 
     res.status(200).json({
       status: "success",
-      data: { overall, byDepartment },
+      materials,
+      results: materials,
+      data: materials,
+    });
+  },
+);
+
+export const getLegacyRoleRecommendations = catchAsync(
+  async (req: Request, res: Response, _next: NextFunction) => {
+    const role = typeof req.query.role === "string" ? req.query.role : "student";
+
+    let query: Record<string, unknown> = { approved: true };
+    if (role === "admin") {
+      query = { approved: false };
+    }
+
+    const materials = (
+      await Material.find(query)
+        .sort(role === "admin" ? "-createdAt" : "-downloadCount -createdAt")
+        .limit(8)
+        .populate(POPULATE_UPLOADER)
+    ).map(normalizeMaterial);
+
+    res.status(200).json({
+      status: "success",
+      role,
+      materials,
+      results: materials,
+      data: materials,
     });
   },
 );

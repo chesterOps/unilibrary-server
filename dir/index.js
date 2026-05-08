@@ -1,59 +1,53 @@
-import dotenv from "dotenv";
-dotenv.config();
-
-import express, { Express, Request, Response, NextFunction } from "express";
-import cors from "cors";
-import morgan from "morgan";
-import helmet from "helmet";
-import cookieParser from "cookie-parser";
-
-import { connectDB } from "./config/db";
-import AppError from "./utils/appError";
-import errorHandler from "./utils/errorHandler";
-
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const dotenv_1 = __importDefault(require("dotenv"));
+dotenv_1.default.config();
+const express_1 = __importDefault(require("express"));
+const cors_1 = __importDefault(require("cors"));
+const morgan_1 = __importDefault(require("morgan"));
+const helmet_1 = __importDefault(require("helmet"));
+const cookie_parser_1 = __importDefault(require("cookie-parser"));
+const db_1 = require("./config/db");
+const appError_1 = __importDefault(require("./utils/appError"));
+const errorHandler_1 = __importDefault(require("./utils/errorHandler"));
 // ── Route imports ─────────────────────────────────────────────────────────────
-import bookRouter from "./routes/book.routes";
-import authRouter from "./routes/auth.routes";
-import materialRouter from "./routes/material.routes";
-import searchRouter from "./routes/search.routes";
-import recommendationRouter from "./routes/recommendation.routes";
-import adminRouter from "./routes/admin.routes";
-import usersRouter from "./routes/users.routes";
-import documentsRouter from "./routes/documents.routes";
-import chatbotRouter from "./routes/chatbot.routes";
-
+const book_routes_1 = __importDefault(require("./routes/book.routes"));
+const auth_routes_1 = __importDefault(require("./routes/auth.routes"));
+const material_routes_1 = __importDefault(require("./routes/material.routes"));
+const search_routes_1 = __importDefault(require("./routes/search.routes"));
+const recommendation_routes_1 = __importDefault(require("./routes/recommendation.routes"));
+const admin_routes_1 = __importDefault(require("./routes/admin.routes"));
+const users_routes_1 = __importDefault(require("./routes/users.routes"));
+const documents_routes_1 = __importDefault(require("./routes/documents.routes"));
+const chatbot_routes_1 = __importDefault(require("./routes/chatbot.routes"));
 // ── App ───────────────────────────────────────────────────────────────────────
-const app: Express = express();
-const PORT: number = Number(process.env.PORT || 3000);
-
+const app = (0, express_1.default)();
+const PORT = Number(process.env.PORT || 3000);
 // ── Global middleware ─────────────────────────────────────────────────────────
-
 // Security: set well-known HTTP headers (X-Frame-Options, CSP, HSTS …)
-app.use(helmet());
-
+app.use((0, helmet_1.default)());
 // CORS: credentials=true enables the browser to send cookies / auth headers
-app.use(
-  cors({
+app.use((0, cors_1.default)({
     origin: (origin, callback) => {
-      // Allow requests with no Origin header (mobile apps, curl, Postman)
-      // In production, replace with an explicit allowlist from FRONT_URL env var
-      if (!origin) return callback(null, true);
-      callback(null, true);
+        // Allow requests with no Origin header (mobile apps, curl, Postman)
+        // In production, replace with an explicit allowlist from FRONT_URL env var
+        if (!origin)
+            return callback(null, true);
+        callback(null, true);
     },
     credentials: true,
-  }),
-);
-
+}));
 // HTTP request logging in development
-if (process.env.NODE_ENV === "development") app.use(morgan("dev"));
-
+if (process.env.NODE_ENV === "development")
+    app.use((0, morgan_1.default)("dev"));
 // Body parsers — 10 kb cap prevents large-payload DoS on JSON endpoints
-app.use(express.json({ limit: "10kb" }));
-app.use(express.urlencoded({ extended: true, limit: "10kb" }));
-
+app.use(express_1.default.json({ limit: "10kb" }));
+app.use(express_1.default.urlencoded({ extended: true, limit: "10kb" }));
 // Cookie parser — needed by JWT-in-cookie flows and future session support
-app.use(cookieParser());
-
+app.use((0, cookie_parser_1.default)());
 // ── Routes ────────────────────────────────────────────────────────────────────
 //
 // Registration order matters only when paths could shadow each other.
@@ -93,47 +87,38 @@ app.use(cookieParser());
 // GET    /api/v1/admin/materials/pending         [protect, admin]
 // PUT    /api/v1/admin/materials/:id/approve     [protect, admin]
 // ─────────────────────────────────────────────────────────────────────────────
-
-app.use("/api/v1/auth", authRouter);
-app.use("/api/v1/books", bookRouter);
-app.use("/api/v1/materials", materialRouter);
-app.use("/api/v1/documents", documentsRouter);
-app.use("/api/v1/search", searchRouter);
-app.use("/api/v1/recommendations", recommendationRouter);
-app.use("/api/v1/admin", adminRouter);
-app.use("/api/v1/users", usersRouter);
-app.use("/api/v1/chatbot", chatbotRouter);
-
+app.use("/api/v1/auth", auth_routes_1.default);
+app.use("/api/v1/books", book_routes_1.default);
+app.use("/api/v1/materials", material_routes_1.default);
+app.use("/api/v1/documents", documents_routes_1.default);
+app.use("/api/v1/search", search_routes_1.default);
+app.use("/api/v1/recommendations", recommendation_routes_1.default);
+app.use("/api/v1/admin", admin_routes_1.default);
+app.use("/api/v1/users", users_routes_1.default);
+app.use("/api/v1/chatbot", chatbot_routes_1.default);
 // ── Health check ──────────────────────────────────────────────────────────────
-app.get("/", (_req: Request, res: Response) => {
-  res.status(200).json({ status: "ok", message: "UniLibrary API is running" });
+app.get("/", (_req, res) => {
+    res.status(200).json({ status: "ok", message: "UniLibrary API is running" });
 });
-
 // ── 404 — must be after all valid routes ──────────────────────────────────────
-app.all("/{*any}", (req: Request, _res: Response, next: NextFunction) => {
-  next(new AppError(`Cannot find ${req.originalUrl} on this server.`, 404));
+app.all("/{*any}", (req, _res, next) => {
+    next(new appError_1.default(`Cannot find ${req.originalUrl} on this server.`, 404));
 });
-
 // ── Global error handler — must be last middleware ────────────────────────────
-app.use(errorHandler);
-
+app.use(errorHandler_1.default);
 // ── Database connection + server start ───────────────────────────────────────
-connectDB();
-
+(0, db_1.connectDB)();
 const server = app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT} [${process.env.NODE_ENV ?? "development"}]`);
+    console.log(`Server running on port ${PORT} [${process.env.NODE_ENV ?? "development"}]`);
 });
-
 // ── Process-level safety nets ─────────────────────────────────────────────────
-
 // Synchronous exceptions not caught by try/catch (e.g. bad requires at startup)
-process.on("uncaughtException", (err: Error) => {
-  console.error("UNCAUGHT EXCEPTION — shutting down:", err.name, err.message);
-  process.exit(1);
+process.on("uncaughtException", (err) => {
+    console.error("UNCAUGHT EXCEPTION — shutting down:", err.name, err.message);
+    process.exit(1);
 });
-
 // Unhandled promise rejections (missing await, unhandled async errors)
-process.on("unhandledRejection", (err: Error) => {
-  console.error("UNHANDLED REJECTION — shutting down:", err.name, err.message);
-  server.close(() => process.exit(1));
+process.on("unhandledRejection", (err) => {
+    console.error("UNHANDLED REJECTION — shutting down:", err.name, err.message);
+    server.close(() => process.exit(1));
 });

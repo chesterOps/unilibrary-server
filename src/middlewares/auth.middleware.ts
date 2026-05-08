@@ -40,6 +40,37 @@ export const protect = catchAsync(
   },
 );
 
+export const optionalProtect = catchAsync(
+  async (req: Request, _res: Response, next: NextFunction) => {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader) {
+      next();
+      return;
+    }
+
+    if (!authHeader.startsWith("Bearer ")) {
+      return next(new AppError("Invalid authorization header format.", 401));
+    }
+
+    const token = authHeader.split(" ")[1];
+    const decoded = verifyToken(token);
+    const user = await User.findById(decoded.id);
+
+    if (!user) {
+      return next(
+        new AppError(
+          "The account belonging to this token no longer exists.",
+          401,
+        ),
+      );
+    }
+
+    req.user = user;
+    next();
+  },
+);
+
 /**
  * Restricts a route to specific roles. Must be used after `protect`
  * since it depends on req.user being set.
