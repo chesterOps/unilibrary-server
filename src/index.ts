@@ -54,6 +54,16 @@ app.use(express.urlencoded({ extended: true, limit: "10kb" }));
 // Cookie parser — needed by JWT-in-cookie flows and future session support
 app.use(cookieParser());
 
+// Hard 25-second ceiling per request — returns 408 instead of hanging forever
+app.use((_req: Request, res: Response, next: NextFunction) => {
+  res.setTimeout(25000, () => {
+    if (!res.headersSent) {
+      res.status(408).json({ status: "error", message: "Request timed out." });
+    }
+  });
+  next();
+});
+
 // ── Routes ────────────────────────────────────────────────────────────────────
 //
 // Registration order matters only when paths could shadow each other.
