@@ -1,4 +1,4 @@
-import { megaStorage } from "../config/megaClient";
+import { getMegaStorage } from "../config/megaClient";
 
 export const uploadToMega = async (
   fileBuffer: Buffer,
@@ -6,14 +6,11 @@ export const uploadToMega = async (
   folderName: string = "unilibrary",
 ) => {
   return new Promise(async (resolve, reject) => {
-    // Check for folder
-
-    const storage = await megaStorage.ready;
+    const storage = await getMegaStorage().ready;
 
     const file = await storage.upload(fileName, fileBuffer).complete;
 
     const link = await file.link({ key: file.key as Buffer });
-    // On successful upload
     resolve({
       megaFileId: file.nodeId,
       url: link,
@@ -26,8 +23,7 @@ export const uploadToMega = async (
 export const deleteOne = async (nodeId: string): Promise<void> => {
   return new Promise((resolve, reject) => {
     try {
-      // Find file
-      const file = megaStorage.files[nodeId];
+      const file = getMegaStorage().files[nodeId];
 
       // Check if file was found
       if (!file) return reject(new Error("File not found"));

@@ -117,23 +117,29 @@ app.all("/{*any}", (req: Request, _res: Response, next: NextFunction) => {
 // ── Global error handler — must be last middleware ────────────────────────────
 app.use(errorHandler);
 
-// ── Database connection + server start ───────────────────────────────────────
-connectDB();
-
-const server = app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT} [${process.env.NODE_ENV ?? "development"}]`);
-});
-
 // ── Process-level safety nets ─────────────────────────────────────────────────
-
-// Synchronous exceptions not caught by try/catch (e.g. bad requires at startup)
 process.on("uncaughtException", (err: Error) => {
   console.error("UNCAUGHT EXCEPTION — shutting down:", err.name, err.message);
   process.exit(1);
 });
 
-// Unhandled promise rejections (missing await, unhandled async errors)
-process.on("unhandledRejection", (err: Error) => {
-  console.error("UNHANDLED REJECTION — shutting down:", err.name, err.message);
-  server.close(() => process.exit(1));
-});
+// ── Database connection + server start ───────────────────────────────────────
+// Await DB before accepting requests so the first login/register never races
+// against an incomplete connection.
+(async () => {
+  try {
+    await connectDB();
+  } catch (err) {
+    console.error("Failed to connect to database — shutting down:", err);
+    process.exit(1);
+  }
+
+  const server = app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT} [${process.env.NODE_ENV ?? "development"}]`);
+  });
+
+  process.on("unhandledRejection", (err: Error) => {
+    console.error("UNHANDLED REJECTION — shutting down:", err.name, err.message);
+    server.close(() => process.exit(1));
+  });
+})();
