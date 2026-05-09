@@ -18,7 +18,11 @@ async function popularInDepartment(department, limit) {
 }
 async function getPersonalizedForUser(user) {
     const userId = user._id;
-    const history = await viewHistory_model_1.default.find({ userId }).sort({ viewedAt: -1 }).limit(5).lean();
+    // Parallel: Fetch history and populate uploader data in one go
+    const [history, uploaderMap] = await Promise.all([
+        viewHistory_model_1.default.find({ userId }).sort({ viewedAt: -1 }).limit(5).lean(),
+        material_model_1.default.find().select("uploadedBy").populate(POPULATE_UPLOADER).lean().then((docs) => new Map(docs.map((d) => [d._id.toString(), d.uploadedBy]))),
+    ]);
     if (history.length === 0) {
         const popular = await popularInDepartment(user.department, 6);
         return {
@@ -26,11 +30,14 @@ async function getPersonalizedForUser(user) {
             data: popular.map(materialResponse_1.normalizeMaterial),
         };
     }
-    const viewedIds = history.map((h) => h.materialId);
+    const viewedIds = history.map((h) => h.materialId.toString());
+    // Fetch viewed items with embeddings in bulk (single query)
     const viewedWithEmbeddings = await material_model_1.default.find({
         _id: { $in: viewedIds },
-        "embedding.0": { $exists: true },
-    }).select("+embedding");
+        embedding: { $exists: true, $ne: [] },
+    })
+        .select("+embedding")
+        .lean();
     if (viewedWithEmbeddings.length === 0) {
         const popular = await popularInDepartment(user.department, 6);
         return {
@@ -38,15 +45,24 @@ async function getPersonalizedForUser(user) {
             data: popular.map(materialResponse_1.normalizeMaterial),
         };
     }
+    // Calculate profile vector once
     const profileVector = (0, similarity_1.averageVectors)(viewedWithEmbeddings.map((m) => m.embedding));
+    // Fetch candidates (6+ limit to pre-filter before sorting)
     const candidates = await material_model_1.default.find({
         _id: { $nin: viewedIds },
-        "embedding.0": { $exists: true },
+        embedding: { $exists: true, $ne: [] },
+        approved: true,
     })
-        .select("+embedding")
-        .populate(POPULATE_UPLOADER);
+        .select("+embedding -embedding")
+        .populate(POPULATE_UPLOADER)
+        .limit(50) // Fetch top 50 then calculate similarity
+        .lean();
+    // Calculate similarity and return top 6
     const results = candidates
-        .map((m) => ({ doc: m, score: (0, similarity_1.cosineSimilarity)(profileVector, m.embedding) }))
+        .map((m) => ({
+        doc: m,
+        score: (0, similarity_1.cosineSimilarity)(profileVector, m.embedding),
+    }))
         .sort((a, b) => b.score - a.score)
         .slice(0, 6)
         .map(({ doc, score }) => ({

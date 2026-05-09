@@ -17,7 +17,19 @@ async function popularInDepartment(department: string, limit: number) {
 
 async function getPersonalizedForUser(user: any) {
   const userId = user._id as mongoose.Types.ObjectId;
-  const history = await ViewHistory.find({ userId }).sort({ viewedAt: -1 }).limit(5).lean();
+
+  // Parallel: Fetch history and populate uploader data in one go
+  const [history, uploaderMap] = await Promise.all([
+    ViewHistory.find({ userId }).sort({ viewedAt: -1 }).limit(5).lean(),
+    Material.find()
+      .select("uploadedBy")
+      .populate(POPULATE_UPLOADER)
+      .lean()
+      .then(
+        (docs) =>
+          new Map(docs.map((d: any) => [d._id.toString(), d.uploadedBy])),
+      ),
+  ]);
 
   if (history.length === 0) {
     const popular = await popularInDepartment(user.department, 6);
@@ -27,11 +39,15 @@ async function getPersonalizedForUser(user: any) {
     };
   }
 
-  const viewedIds = history.map((h) => h.materialId);
+  const viewedIds = history.map((h) => h.materialId.toString());
+
+  // Fetch viewed items with embeddings in bulk (single query)
   const viewedWithEmbeddings = await Material.find({
     _id: { $in: viewedIds },
-    "embedding.0": { $exists: true },
-  }).select("+embedding");
+    embedding: { $exists: true, $ne: [] },
+  })
+    .select("+embedding")
+    .lean();
 
   if (viewedWithEmbeddings.length === 0) {
     const popular = await popularInDepartment(user.department, 6);
@@ -41,16 +57,28 @@ async function getPersonalizedForUser(user: any) {
     };
   }
 
-  const profileVector = averageVectors(viewedWithEmbeddings.map((m) => m.embedding));
+  // Calculate profile vector once
+  const profileVector = averageVectors(
+    viewedWithEmbeddings.map((m: any) => m.embedding),
+  );
+
+  // Fetch candidates (6+ limit to pre-filter before sorting)
   const candidates = await Material.find({
     _id: { $nin: viewedIds },
-    "embedding.0": { $exists: true },
+    embedding: { $exists: true, $ne: [] },
+    approved: true,
   })
-    .select("+embedding")
-    .populate(POPULATE_UPLOADER);
+    .select("+embedding -embedding")
+    .populate(POPULATE_UPLOADER)
+    .limit(50) // Fetch top 50 then calculate similarity
+    .lean();
 
+  // Calculate similarity and return top 6
   const results = candidates
-    .map((m) => ({ doc: m, score: cosineSimilarity(profileVector, m.embedding) }))
+    .map((m: any) => ({
+      doc: m,
+      score: cosineSimilarity(profileVector, m.embedding),
+    }))
     .sort((a, b) => b.score - a.score)
     .slice(0, 6)
     .map(({ doc, score }) => ({
@@ -100,7 +128,9 @@ export const getRecommendations = catchAsync(
 export const getPopular = catchAsync(
   async (req: Request, res: Response, _next: NextFunction) => {
     const department =
-      typeof req.query.department === "string" ? req.query.department.trim() : "";
+      typeof req.query.department === "string"
+        ? req.query.department.trim()
+        : "";
 
     const query = department
       ? { department: new RegExp(department, "i"), approved: true }
@@ -124,7 +154,8 @@ export const getPopular = catchAsync(
 
 export const getLegacyRoleRecommendations = catchAsync(
   async (req: Request, res: Response, _next: NextFunction) => {
-    const role = typeof req.query.role === "string" ? req.query.role : "student";
+    const role =
+      typeof req.query.role === "string" ? req.query.role : "student";
 
     let query: Record<string, unknown> = { approved: true };
     if (role === "admin") {
