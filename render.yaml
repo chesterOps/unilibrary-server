@@ -13,4 +13,4 @@ services:
     runtime: node
     schedule: "*/14 * * * *"
     buildCommand: ""
-    startCommand: node -e "require('https').get('https://unilibrary-server.onrender.com/', (r) => { console.log('ping', r.statusCode); r.resume(); })"
+    startCommand: node -e "const https = require('https'); const req = https.get('https://unilibrary-server.onrender.com/', { timeout: 10000 }, (r) => { console.log('ping ok:', r.statusCode); r.resume(); }).on('timeout', () => { console.log('ping timeout'); req.destroy(); }).on('error', (e) => { console.log('ping error:', e.message); });"
