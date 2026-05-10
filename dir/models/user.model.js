@@ -68,7 +68,7 @@ userSchema.index({ department: 1, role: 1 });
 userSchema.pre("save", async function (next) {
     if (!this.isModified("password"))
         return next();
-    this.password = await bcryptjs_1.default.hash(this.password, 12);
+    this.password = await bcryptjs_1.default.hash(this.password, 10);
     next();
 });
 userSchema.methods.comparePassword = async function (candidate) {

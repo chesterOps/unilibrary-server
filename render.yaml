@@ -7,3 +7,10 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+
+  - type: cron
+    name: keep-alive-ping
+    runtime: node
+    schedule: "*/14 * * * *"
+    buildCommand: ""
+    startCommand: node -e "require('https').get('https://unilibrary-server.onrender.com/', (r) => { console.log('ping', r.statusCode); r.resume(); })"

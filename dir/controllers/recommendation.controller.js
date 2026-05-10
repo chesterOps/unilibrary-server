@@ -21,7 +21,11 @@ async function getPersonalizedForUser(user) {
     // Parallel: Fetch history and populate uploader data in one go
     const [history, uploaderMap] = await Promise.all([
         viewHistory_model_1.default.find({ userId }).sort({ viewedAt: -1 }).limit(5).lean(),
-        material_model_1.default.find().select("uploadedBy").populate(POPULATE_UPLOADER).lean().then((docs) => new Map(docs.map((d) => [d._id.toString(), d.uploadedBy]))),
+        material_model_1.default.find()
+            .select("uploadedBy")
+            .populate(POPULATE_UPLOADER)
+            .lean()
+            .then((docs) => new Map(docs.map((d) => [d._id.toString(), d.uploadedBy]))),
     ]);
     if (history.length === 0) {
         const popular = await popularInDepartment(user.department, 6);
@@ -101,7 +105,9 @@ exports.getRecommendations = (0, catchAsync_1.default)(async (req, res, _next) =
     });
 });
 exports.getPopular = (0, catchAsync_1.default)(async (req, res, _next) => {
-    const department = typeof req.query.department === "string" ? req.query.department.trim() : "";
+    const department = typeof req.query.department === "string"
+        ? req.query.department.trim()
+        : "";
     const query = department
         ? { department: new RegExp(department, "i"), approved: true }
         : { approved: true };

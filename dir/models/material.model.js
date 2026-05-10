@@ -117,7 +117,12 @@ materialSchema.index({ approved: 1, embedding: 1 });
 // Compound index for the admin pending-approval queue (filter + sort in one pass)
 materialSchema.index({ approved: 1, createdAt: -1 });
 // Indexes for popular materials queries (sort by download/view counts)
-materialSchema.index({ approved: 1, downloadCount: -1, viewCount: -1, createdAt: -1 });
+materialSchema.index({
+    approved: 1,
+    downloadCount: -1,
+    viewCount: -1,
+    createdAt: -1,
+});
 materialSchema.index({ department: 1, downloadCount: -1, createdAt: -1 });
 // Full-text index for NLP keyword search
 materialSchema.index({ title: "text", courseCode: "text", tags: "text" }, { weights: { title: 10, courseCode: 5, tags: 3 }, name: "material_text" });

@@ -48,6 +48,15 @@ app.use(express_1.default.json({ limit: "10kb" }));
 app.use(express_1.default.urlencoded({ extended: true, limit: "10kb" }));
 // Cookie parser — needed by JWT-in-cookie flows and future session support
 app.use((0, cookie_parser_1.default)());
+// Hard 25-second ceiling per request — returns 408 instead of hanging forever
+app.use((_req, res, next) => {
+    res.setTimeout(25000, () => {
+        if (!res.headersSent) {
+            res.status(408).json({ status: "error", message: "Request timed out." });
+        }
+    });
+    next();
+});
 // ── Routes ────────────────────────────────────────────────────────────────────
 //
 // Registration order matters only when paths could shadow each other.
@@ -106,19 +115,27 @@ app.all("/{*any}", (req, _res, next) => {
 });
 // ── Global error handler — must be last middleware ────────────────────────────
 app.use(errorHandler_1.default);
-// ── Database connection + server start ───────────────────────────────────────
-(0, db_1.connectDB)();
-const server = app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT} [${process.env.NODE_ENV ?? "development"}]`);
-});
 // ── Process-level safety nets ─────────────────────────────────────────────────
-// Synchronous exceptions not caught by try/catch (e.g. bad requires at startup)
 process.on("uncaughtException", (err) => {
     console.error("UNCAUGHT EXCEPTION — shutting down:", err.name, err.message);
     process.exit(1);
 });
-// Unhandled promise rejections (missing await, unhandled async errors)
-process.on("unhandledRejection", (err) => {
-    console.error("UNHANDLED REJECTION — shutting down:", err.name, err.message);
-    server.close(() => process.exit(1));
-});
+// ── Database connection + server start ───────────────────────────────────────
+// Await DB before accepting requests so the first login/register never races
+// against an incomplete connection.
+(async () => {
+    try {
+        await (0, db_1.connectDB)();
+    }
+    catch (err) {
+        console.error("Failed to connect to database — shutting down:", err);
+        process.exit(1);
+    }
+    const server = app.listen(PORT, () => {
+        console.log(`Server running on port ${PORT} [${process.env.NODE_ENV ?? "development"}]`);
+    });
+    process.on("unhandledRejection", (err) => {
+        console.error("UNHANDLED REJECTION — shutting down:", err.name, err.message);
+        server.close(() => process.exit(1));
+    });
+})();
