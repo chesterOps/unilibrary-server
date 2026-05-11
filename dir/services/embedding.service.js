@@ -1,18 +1,16 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.generateEmbedding = generateEmbedding;
 exports.buildEmbeddingText = buildEmbeddingText;
-const openai_1 = __importDefault(require("../config/openai"));
+const openai_1 = require("../config/openai");
 /**
  * Calls the OpenAI Embeddings API and returns the embedding vector.
  * Input is sliced to 8 000 chars — well within the 8 191-token API limit
  * for text-embedding-3-small even for verbose inputs.
  */
 async function generateEmbedding(text) {
-    const response = await openai_1.default.embeddings.create({
+    const openai = (0, openai_1.getOpenAI)();
+    const response = await openai.embeddings.create({
         model: process.env.OPENAI_EMBEDDING_MODEL || "text-embedding-3-small",
         input: text.trim().slice(0, 8000),
     });

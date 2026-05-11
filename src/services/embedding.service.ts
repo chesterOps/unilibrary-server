@@ -1,4 +1,4 @@
-import openai from "../config/openai";
+import { getOpenAI } from "../config/openai";
 
 /**
  * Calls the OpenAI Embeddings API and returns the embedding vector.
@@ -6,6 +6,7 @@ import openai from "../config/openai";
  * for text-embedding-3-small even for verbose inputs.
  */
 export async function generateEmbedding(text: string): Promise<number[]> {
+  const openai = getOpenAI();
   const response = await openai.embeddings.create({
     model: process.env.OPENAI_EMBEDDING_MODEL || "text-embedding-3-small",
     input: text.trim().slice(0, 8000),
