@@ -62,7 +62,8 @@ exports.login = (0, catchAsync_1.default)(async (req, res, next) => {
     if (!user || !(await user.comparePassword(password))) {
         return next(new appError_1.default("Incorrect email or password.", 401));
     }
-    if (!user.approved) {
+    // Admins bypass approval requirement (allows first admin to login)
+    if (!user.approved && user.role !== "admin") {
         return next(new appError_1.default("Your account is pending admin approval", 403));
     }
     const token = (0, jwt_1.signToken)(user._id.toString());

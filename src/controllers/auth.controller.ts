@@ -81,7 +81,8 @@ export const login = catchAsync(
       return next(new AppError("Incorrect email or password.", 401));
     }
 
-    if (!user.approved) {
+    // Admins bypass approval requirement (allows first admin to login)
+    if (!user.approved && user.role !== "admin") {
       return next(
         new AppError("Your account is pending admin approval", 403),
       );
