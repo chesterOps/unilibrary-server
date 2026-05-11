@@ -69,9 +69,7 @@ export const login = catchAsync(
     const { email, password } = req.body;
 
     if (!email || !password) {
-      return next(
-        new AppError("Please provide your email and password.", 400),
-      );
+      return next(new AppError("Please provide your email and password.", 400));
     }
 
     // password has select:false — must opt in explicitly
@@ -83,9 +81,7 @@ export const login = catchAsync(
 
     // Admins bypass approval requirement (allows first admin to login)
     if (!user.approved && user.role !== "admin") {
-      return next(
-        new AppError("Your account is pending admin approval", 403),
-      );
+      return next(new AppError("Your account is pending admin approval", 403));
     }
 
     const token = signToken((user._id as string).toString());
