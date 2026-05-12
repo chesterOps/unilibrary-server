@@ -11,6 +11,7 @@ const morgan_1 = __importDefault(require("morgan"));
 const helmet_1 = __importDefault(require("helmet"));
 const cookie_parser_1 = __importDefault(require("cookie-parser"));
 const db_1 = require("./config/db");
+const user_model_1 = __importDefault(require("./models/user.model"));
 const appError_1 = __importDefault(require("./utils/appError"));
 const errorHandler_1 = __importDefault(require("./utils/errorHandler"));
 // ── Route imports ─────────────────────────────────────────────────────────────
@@ -130,6 +131,22 @@ process.on("uncaughtException", (err) => {
     catch (err) {
         console.error("Failed to connect to database — shutting down:", err);
         process.exit(1);
+    }
+    // Ensure a default admin account always exists
+    const adminEmail = process.env.ADMIN_EMAIL ?? "admin@unilibrary.com";
+    const adminPassword = process.env.ADMIN_PASSWORD ?? "Admin@123";
+    const existing = await user_model_1.default.findOne({ email: adminEmail });
+    if (!existing) {
+        await user_model_1.default.create({
+            name: "Admin",
+            email: adminEmail,
+            password: adminPassword,
+            role: "admin",
+            department: "Administration",
+            approved: true,
+            courses: [],
+        });
+        console.log(`Default admin created — email: ${adminEmail}`);
     }
     const server = app.listen(PORT, () => {
         console.log(`Server running on port ${PORT} [${process.env.NODE_ENV ?? "development"}]`);

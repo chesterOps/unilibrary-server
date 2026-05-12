@@ -33,6 +33,9 @@ const sendTokenResponse = (user, statusCode, res) => {
 // ── Controllers ───────────────────────────────────────────────────────────────
 exports.register = (0, catchAsync_1.default)(async (req, res, next) => {
     const { name, email, password, role, department, level, courses } = req.body;
+    if (role === "admin") {
+        return next(new appError_1.default("Admin accounts cannot be created via registration.", 403));
+    }
     if (role === "student" && !level) {
         return next(new appError_1.default("Level is required for students.", 400));
     }
@@ -40,7 +43,7 @@ exports.register = (0, catchAsync_1.default)(async (req, res, next) => {
         name,
         email,
         password,
-        role,
+        role: role || "student",
         department,
         level,
         courses,
