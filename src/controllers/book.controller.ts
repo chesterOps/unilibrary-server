@@ -6,14 +6,6 @@ import { slugify } from "../utils/helpers";
 import { deleteOne, findAll, findOne } from "../utils/handlerFactory";
 import { File } from "megajs";
 
-// Define UploadedFile type
-type UploadedFile = {
-  megaFileId: string;
-  url: string;
-  size: number;
-  format: string;
-};
-
 // Upload book
 export const uploadBook = catchAsync(async (req, res, next) => {
   const { title, courseCode, year } = req.body;
@@ -31,10 +23,10 @@ export const uploadBook = catchAsync(async (req, res, next) => {
   const fileType = file.mimetype.split("/")[1];
 
   // Upload book file to Mega
-  const uploadedFile = (await uploadToMega(
+  const uploadedFile = await uploadToMega(
     file.buffer,
     `${slugify(title)}.${fileType}`,
-  )) as UploadedFile;
+  );
 
   // Create new book
   const newBook = new Book({
