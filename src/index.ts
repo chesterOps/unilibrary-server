@@ -119,6 +119,9 @@ app.use("/api/v1/chatbot", chatbotRouter);
 app.get("/", (_req: Request, res: Response) => {
   res.status(200).json({ status: "ok", message: "UniLibrary API is running" });
 });
+app.get("/api/v1/health", (_req: Request, res: Response) => {
+  res.status(200).json({ status: "ok" });
+});
 
 // ── 404 — must be after all valid routes ──────────────────────────────────────
 app.all("/{*any}", (req: Request, _res: Response, next: NextFunction) => {
