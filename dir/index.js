@@ -110,6 +110,9 @@ app.use("/api/v1/chatbot", chatbot_routes_1.default);
 app.get("/", (_req, res) => {
     res.status(200).json({ status: "ok", message: "UniLibrary API is running" });
 });
+app.get("/api/v1/health", (_req, res) => {
+    res.status(200).json({ status: "ok" });
+});
 // ── 404 — must be after all valid routes ──────────────────────────────────────
 app.all("/{*any}", (req, _res, next) => {
     next(new appError_1.default(`Cannot find ${req.originalUrl} on this server.`, 404));
