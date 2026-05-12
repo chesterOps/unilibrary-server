@@ -10,26 +10,15 @@ import {
 } from "../controllers/material.controller";
 import { protect, authorize } from "../middlewares/auth.middleware";
 import upload from "../middlewares/multer";
-import cloudinary from "../config/cloudinary";
+import { uploadToMega } from "../utils/handlerMega";
 
 const materialRouter = express.Router();
 
 const handleFileUpload = async (req: Request, _res: Response, next: NextFunction) => {
   try {
     if (req.file) {
-      const timestamp = Date.now();
-      const safeName = req.file.originalname.replace(/[^a-zA-Z0-9.]/g, "_");
-      const publicId = `unilibrary/files/${timestamp}-${safeName}`;
-
-      const result = await new Promise<any>((resolve, reject) => {
-        const stream = cloudinary.uploader.upload_stream(
-          { resource_type: "raw", public_id: publicId },
-          (err, res) => (err ? reject(err) : resolve(res)),
-        );
-        stream.end(req.file!.buffer);
-      });
-
-      req.body.fileUrl = result.secure_url;
+      const result = await uploadToMega(req.file.buffer, req.file.originalname) as any;
+      req.body.fileUrl = result.url;
       req.body.fileName = req.file.originalname;
       req.body.fileType = req.file.mimetype.includes("pdf") ? "pdf" : req.file.mimetype.split("/")[1];
     }
