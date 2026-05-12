@@ -1,7 +1,5 @@
 import { Storage } from "megajs";
 
-// Lazy-initialized: only connects to MEGA when an upload is first requested,
-// not at server boot. Prevents MEGA auth delays from blocking login/register.
 let _megaStorage: Storage | null = null;
 
 export const getMegaStorage = (): Storage => {
@@ -10,6 +8,8 @@ export const getMegaStorage = (): Storage => {
       email: process.env.MEGA_EMAIL!,
       password: process.env.MEGA_PASSWORD!,
     });
+    // Reset cached instance on any error so the next request gets a fresh connection
+    (_megaStorage as any).on?.("error", () => { _megaStorage = null; });
   }
   return _megaStorage;
 };
