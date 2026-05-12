@@ -41,6 +41,10 @@ export const register = catchAsync(
     const { name, email, password, role, department, level, courses } =
       req.body;
 
+    if (role === "admin") {
+      return next(new AppError("Admin accounts cannot be created via registration.", 403));
+    }
+
     if (role === "student" && !level) {
       return next(new AppError("Level is required for students.", 400));
     }
@@ -49,7 +53,7 @@ export const register = catchAsync(
       name,
       email,
       password,
-      role,
+      role: role || "student",
       department,
       level,
       courses,

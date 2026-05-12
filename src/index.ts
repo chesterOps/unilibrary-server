@@ -8,6 +8,7 @@ import helmet from "helmet";
 import cookieParser from "cookie-parser";
 
 import { connectDB } from "./config/db";
+import User from "./models/user.model";
 import AppError from "./utils/appError";
 import errorHandler from "./utils/errorHandler";
 
@@ -142,6 +143,23 @@ process.on("uncaughtException", (err: Error) => {
   } catch (err) {
     console.error("Failed to connect to database — shutting down:", err);
     process.exit(1);
+  }
+
+  // Ensure a default admin account always exists
+  const adminEmail = process.env.ADMIN_EMAIL ?? "admin@unilibrary.com";
+  const adminPassword = process.env.ADMIN_PASSWORD ?? "Admin@123";
+  const existing = await User.findOne({ email: adminEmail });
+  if (!existing) {
+    await User.create({
+      name: "Admin",
+      email: adminEmail,
+      password: adminPassword,
+      role: "admin",
+      department: "Administration",
+      approved: true,
+      courses: [],
+    });
+    console.log(`Default admin created — email: ${adminEmail}`);
   }
 
   const server = app.listen(PORT, () => {
