@@ -17,11 +17,20 @@ function buildPasswordResetUrl(token) {
     return `${getFrontendBaseUrl()}/reset-password/${token}`;
 }
 function createTransport() {
-    const host = process.env.SMTP_HOST;
-    const port = Number(process.env.SMTP_PORT || 587);
-    const user = process.env.SMTP_USER;
-    const pass = process.env.SMTP_PASS;
+    const host = process.env.SMTP_HOST || process.env.MAIL_HOST;
+    const port = Number(process.env.SMTP_PORT || process.env.MAIL_PORT || 587);
+    const user = process.env.SMTP_USER || process.env.MAIL_USER;
+    const pass = process.env.SMTP_PASS ||
+        process.env.SMTP_PASSWORD ||
+        process.env.MAIL_PASS ||
+        process.env.MAIL_PASSWORD;
     if (!host || !user || !pass) {
+        const missing = [
+            !host ? "SMTP_HOST" : null,
+            !user ? "SMTP_USER" : null,
+            !pass ? "SMTP_PASS" : null,
+        ].filter(Boolean);
+        console.warn(`[Email] SMTP is not configured; missing ${missing.join(", ")}.`);
         return null;
     }
     return nodemailer_1.default.createTransport({
@@ -34,14 +43,13 @@ function createTransport() {
 async function sendEmail(options) {
     const transport = createTransport();
     if (!transport) {
-        console.warn("[Email] SMTP is not configured; email was not sent.");
         if (process.env.NODE_ENV === "production") {
             throw new Error("SMTP is not configured.");
         }
         return false;
     }
     await transport.sendMail({
-        from: process.env.EMAIL_FROM || process.env.SMTP_USER,
+        from: process.env.EMAIL_FROM || process.env.MAIL_FROM || process.env.SMTP_USER,
         ...options,
     });
     return true;

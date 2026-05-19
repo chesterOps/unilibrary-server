@@ -162,7 +162,16 @@ export const forgotPassword = catchAsync(
       user.passwordResetExpires = undefined;
       await user.save({ validateBeforeSave: false });
       console.error("[Email] Password reset email failed:", err);
-      return next(new AppError("Unable to send password reset email. Please try again later.", 500));
+      const isMissingSmtp =
+        err instanceof Error && err.message.includes("SMTP is not configured");
+      return next(
+        new AppError(
+          isMissingSmtp
+            ? "Password reset email is not configured on the server."
+            : "Unable to send password reset email. Please try again later.",
+          isMissingSmtp ? 503 : 500,
+        ),
+      );
     }
 
     res.status(200).json({ status: "success", message: genericMessage });
