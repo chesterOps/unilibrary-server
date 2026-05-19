@@ -183,6 +183,26 @@ export const logView = catchAsync(
   },
 );
 
+export const logDownload = catchAsync(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const material = await findMaterialByIdentifier(req.params.id);
+    if (!material) {
+      return next(new AppError("No material found with that ID.", 404));
+    }
+
+    material.downloadCount = (material.downloadCount ?? 0) + 1;
+    await material.save();
+
+    res.status(200).json({
+      status: "success",
+      message: "Download logged.",
+      success: true,
+      material: normalizeMaterial(material),
+      data: { material: normalizeMaterial(material) },
+    });
+  },
+);
+
 export const getMaterial = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
     const material = await findMaterialByIdentifier(req.params.id);

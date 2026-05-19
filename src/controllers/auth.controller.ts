@@ -4,6 +4,7 @@ import User, { IUser } from "../models/user.model";
 import AppError from "../utils/appError";
 import catchAsync from "../utils/catchAsync";
 import { signToken } from "../utils/jwt";
+import { buildPasswordResetUrl, sendEmail } from "../services/email.service";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -111,7 +112,7 @@ export const forgotPassword = catchAsync(
 
     // Always return the same message — don't reveal whether the email exists
     const genericMessage =
-      "If that email address is registered, a password reset token has been logged to the console.";
+      "If that email address is registered, a password reset link has been sent to your inbox.";
 
     if (!user) {
       res.status(200).json({ status: "success", message: genericMessage });
@@ -124,9 +125,45 @@ export const forgotPassword = catchAsync(
 
     console.log("\n====== PASSWORD RESET TOKEN ======");
     console.log(`  Email      : ${user.email}`);
-    console.log(`  Token      : ${resetToken}`);
+    const resetUrl = buildPasswordResetUrl(resetToken);
+
+    console.log(`  Reset URL  : ${resetUrl}`);
     console.log(`  Expires at : ${user.passwordResetExpires}`);
     console.log("==================================\n");
+
+    try {
+      await sendEmail({
+        to: user.email,
+        subject: "Reset your UniLibrary password",
+        text: [
+          `Hello ${user.name || "there"},`,
+          "",
+          "We received a request to reset your UniLibrary password.",
+          `Use this link to choose a new password: ${resetUrl}`,
+          "",
+          "This link expires in 30 minutes. If you did not request it, you can ignore this email.",
+        ].join("\n"),
+        html: `
+          <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #0f172a;">
+            <h2 style="margin: 0 0 16px;">Reset your UniLibrary password</h2>
+            <p>Hello ${user.name || "there"},</p>
+            <p>We received a request to reset your UniLibrary password.</p>
+            <p>
+              <a href="${resetUrl}" style="display: inline-block; padding: 12px 18px; background: #234876; color: #ffffff; text-decoration: none; border-radius: 8px;">
+                Reset password
+              </a>
+            </p>
+            <p>This link expires in 30 minutes. If you did not request it, you can ignore this email.</p>
+          </div>
+        `,
+      });
+    } catch (err) {
+      user.passwordResetToken = undefined;
+      user.passwordResetExpires = undefined;
+      await user.save({ validateBeforeSave: false });
+      console.error("[Email] Password reset email failed:", err);
+      return next(new AppError("Unable to send password reset email. Please try again later.", 500));
+    }
 
     res.status(200).json({ status: "success", message: genericMessage });
   },
@@ -146,6 +183,10 @@ export const resetPassword = catchAsync(
 
     if (!user) {
       return next(new AppError("Token is invalid or has expired.", 400));
+    }
+
+    if (!req.body.password || String(req.body.password).length < 8) {
+      return next(new AppError("Password must be at least 8 characters.", 400));
     }
 
     user.password = req.body.password;

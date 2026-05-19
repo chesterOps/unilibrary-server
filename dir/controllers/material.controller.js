@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getMaterialRecommendations = exports.deleteMaterial = exports.getMaterial = exports.logView = exports.getMyUploads = exports.getMaterials = exports.uploadMaterial = void 0;
+exports.getMaterialRecommendations = exports.deleteMaterial = exports.getMaterial = exports.logDownload = exports.logView = exports.getMyUploads = exports.getMaterials = exports.uploadMaterial = void 0;
 const material_model_1 = __importDefault(require("../models/material.model"));
 const viewHistory_model_1 = __importDefault(require("../models/viewHistory.model"));
 const appError_1 = __importDefault(require("../utils/appError"));
@@ -126,6 +126,21 @@ exports.logView = (0, catchAsync_1.default)(async (req, res, next) => {
         status: "success",
         message: "View logged.",
         success: true,
+    });
+});
+exports.logDownload = (0, catchAsync_1.default)(async (req, res, next) => {
+    const material = await (0, materialResponse_1.findMaterialByIdentifier)(req.params.id);
+    if (!material) {
+        return next(new appError_1.default("No material found with that ID.", 404));
+    }
+    material.downloadCount = (material.downloadCount ?? 0) + 1;
+    await material.save();
+    res.status(200).json({
+        status: "success",
+        message: "Download logged.",
+        success: true,
+        material: (0, materialResponse_1.normalizeMaterial)(material),
+        data: { material: (0, materialResponse_1.normalizeMaterial)(material) },
     });
 });
 exports.getMaterial = (0, catchAsync_1.default)(async (req, res, next) => {

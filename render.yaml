@@ -4,6 +4,7 @@ services:
     runtime: node
     buildCommand: npm install && npm run build
     startCommand: npm start
+    healthCheckPath: /api/v1/health
     envVars:
       - key: NODE_ENV
         value: production
@@ -13,10 +14,15 @@ services:
         sync: false
       - key: OPENAI_API_KEY
         sync: false
-
-  - type: cron
-    name: keep-alive-ping
-    runtime: node
-    schedule: "*/14 * * * *"
-    buildCommand: ""
-    startCommand: node -e "const https = require('https'); const req = https.get('https://unilibrary-server.onrender.com/', { timeout: 10000 }, (r) => { console.log('ping ok:', r.statusCode); r.resume(); }).on('timeout', () => { console.log('ping timeout'); req.destroy(); }).on('error', (e) => { console.log('ping error:', e.message); });"
+      - key: FRONT_URL
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: 587
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: EMAIL_FROM
+        sync: false

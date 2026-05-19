@@ -4,6 +4,7 @@ import {
   getMaterials,
   getMaterial,
   logView,
+  logDownload,
   deleteMaterial,
   getMyUploads,
   getMaterialRecommendations,
@@ -52,5 +53,6 @@ materialRouter.get("/:id/recommendations", getMaterialRecommendations);
 materialRouter.route("/:id").get(getMaterial).delete(protect, deleteMaterial);
 
 materialRouter.post("/:id/view", protect, logView);
+materialRouter.post("/:id/download", protect, logDownload);
 
 export default materialRouter;

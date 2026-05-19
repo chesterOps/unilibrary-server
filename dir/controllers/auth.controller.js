@@ -9,6 +9,7 @@ const user_model_1 = __importDefault(require("../models/user.model"));
 const appError_1 = __importDefault(require("../utils/appError"));
 const catchAsync_1 = __importDefault(require("../utils/catchAsync"));
 const jwt_1 = require("../utils/jwt");
+const email_service_1 = require("../services/email.service");
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const safeUser = (user) => ({
     _id: user._id,
@@ -84,7 +85,7 @@ exports.forgotPassword = (0, catchAsync_1.default)(async (req, res, next) => {
     }
     const user = await user_model_1.default.findOne({ email });
     // Always return the same message — don't reveal whether the email exists
-    const genericMessage = "If that email address is registered, a password reset token has been logged to the console.";
+    const genericMessage = "If that email address is registered, a password reset link has been sent to your inbox.";
     if (!user) {
         res.status(200).json({ status: "success", message: genericMessage });
         return;
@@ -94,9 +95,44 @@ exports.forgotPassword = (0, catchAsync_1.default)(async (req, res, next) => {
     await user.save({ validateBeforeSave: false });
     console.log("\n====== PASSWORD RESET TOKEN ======");
     console.log(`  Email      : ${user.email}`);
-    console.log(`  Token      : ${resetToken}`);
+    const resetUrl = (0, email_service_1.buildPasswordResetUrl)(resetToken);
+    console.log(`  Reset URL  : ${resetUrl}`);
     console.log(`  Expires at : ${user.passwordResetExpires}`);
     console.log("==================================\n");
+    try {
+        await (0, email_service_1.sendEmail)({
+            to: user.email,
+            subject: "Reset your UniLibrary password",
+            text: [
+                `Hello ${user.name || "there"},`,
+                "",
+                "We received a request to reset your UniLibrary password.",
+                `Use this link to choose a new password: ${resetUrl}`,
+                "",
+                "This link expires in 30 minutes. If you did not request it, you can ignore this email.",
+            ].join("\n"),
+            html: `
+          <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #0f172a;">
+            <h2 style="margin: 0 0 16px;">Reset your UniLibrary password</h2>
+            <p>Hello ${user.name || "there"},</p>
+            <p>We received a request to reset your UniLibrary password.</p>
+            <p>
+              <a href="${resetUrl}" style="display: inline-block; padding: 12px 18px; background: #234876; color: #ffffff; text-decoration: none; border-radius: 8px;">
+                Reset password
+              </a>
+            </p>
+            <p>This link expires in 30 minutes. If you did not request it, you can ignore this email.</p>
+          </div>
+        `,
+        });
+    }
+    catch (err) {
+        user.passwordResetToken = undefined;
+        user.passwordResetExpires = undefined;
+        await user.save({ validateBeforeSave: false });
+        console.error("[Email] Password reset email failed:", err);
+        return next(new appError_1.default("Unable to send password reset email. Please try again later.", 500));
+    }
     res.status(200).json({ status: "success", message: genericMessage });
 });
 exports.resetPassword = (0, catchAsync_1.default)(async (req, res, next) => {
@@ -110,6 +146,9 @@ exports.resetPassword = (0, catchAsync_1.default)(async (req, res, next) => {
     }).select("+passwordResetToken +passwordResetExpires");
     if (!user) {
         return next(new appError_1.default("Token is invalid or has expired.", 400));
+    }
+    if (!req.body.password || String(req.body.password).length < 8) {
+        return next(new appError_1.default("Password must be at least 8 characters.", 400));
     }
     user.password = req.body.password;
     user.passwordResetToken = undefined;
